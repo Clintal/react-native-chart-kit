@@ -1,5 +1,5 @@
 import React from "react";
-import { View } from "react-native";
+import { View, Text } from "react-native";
 import {
   Svg,
   Circle,
@@ -228,11 +228,53 @@ class LineChart extends AbstractChart {
     });
   };
 
+  renderLinesLegend = config => {
+    const { data } = config;
+
+    return (
+      <View
+        style={{
+          flex: 1,
+          zIndex: 1000,
+          position: "absolute",
+          top: -30,
+          right: 0,
+          flexDirection: "column"
+        }}
+      >
+        {data.map(dataset => {
+          return dataset.legendLabel ? (
+            <View
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                marginTop: 3
+              }}
+            >
+              <View
+                style={{
+                  width: 10,
+                  height: 10,
+                  marginRight: 2,
+                  backgroundColor: this.getColor(dataset, 1),
+                  borderRadius: 10
+                }}
+              />
+              <Text>{dataset.legendLabel}</Text>
+            </View>
+          ) : null;
+        })}
+      </View>
+    );
+  };
+
   render() {
     const {
       width,
       height,
       data,
+      withLinesLegend,
       withShadow = true,
       withDots = true,
       withInnerLines = true,
@@ -256,6 +298,10 @@ class LineChart extends AbstractChart {
     const datas = this.getDatas(data.datasets);
     return (
       <View style={style}>
+        {withLinesLegend &&
+          this.renderLinesLegend({
+            data: data.datasets
+          })}
         <Svg height={height} width={width}>
           <G>
             {this.renderDefs({
