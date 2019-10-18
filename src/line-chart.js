@@ -62,29 +62,30 @@ class LineChart extends AbstractChart {
           });
         };
 
-        output.push(
-          <Circle
-            key={Math.random()}
-            cx={cx}
-            cy={cy}
-            fill={
-              typeof getDotColor === "function"
-                ? getDotColor(x, i)
-                : this.getColor(dataset, 0.9)
-            }
-            onPress={onPress}
-            {...this.getPropsForDots()}
-          />,
-          <Circle
-            key={Math.random()}
-            cx={cx}
-            cy={cy}
-            r="12"
-            fill="#fff"
-            fillOpacity={0}
-            onPress={onPress}
-          />
-        );
+        x !== null &&
+          output.push(
+            <Circle
+              key={Math.random()}
+              cx={cx}
+              cy={cy}
+              fill={
+                typeof getDotColor === "function"
+                  ? getDotColor(x, i)
+                  : this.getColor(dataset, 0.9)
+              }
+              onPress={onPress}
+              {...this.getPropsForDots()}
+            />,
+            <Circle
+              key={Math.random()}
+              cx={cx}
+              cy={cy}
+              r="12"
+              fill="#fff"
+              fillOpacity={0}
+              onPress={onPress}
+            />
+          );
       });
     });
     return output;
@@ -111,7 +112,7 @@ class LineChart extends AbstractChart {
                 const y =
                   ((baseHeight - this.calcHeight(d, datas, height)) / 4) * 3 +
                   paddingTop;
-                return `${x},${y}`;
+                return d === null ? null : `${x},${y}`;
               })
               .join(" ") +
             ` ${paddingRight +
@@ -142,7 +143,7 @@ class LineChart extends AbstractChart {
         const y =
           ((baseHeight - this.calcHeight(d, datas, height)) / 4) * 3 +
           paddingTop;
-        return `${x},${y}`;
+        return d === null ? null : `${x},${y}`;
       });
 
       output.push(
