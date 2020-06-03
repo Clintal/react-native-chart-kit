@@ -1,6 +1,6 @@
 import React from "react";
 import { View } from "react-native";
-import { Svg, Rect, G } from "react-native-svg";
+import { Svg, Rect, G, Text } from "react-native-svg";
 import AbstractChart from "./abstract-chart";
 
 const barWidth = 32;
@@ -12,7 +12,7 @@ class BarChart extends AbstractChart {
   };
 
   renderBars = config => {
-    const { data, width, height, paddingTop, paddingRight } = config;
+    const { data, width, height, paddingTop, paddingRight, barRadius } = config;
     const baseHeight = this.calcBaseHeight(data, height);
     return data.map((x, i) => {
       const barHeight = this.calcHeight(x, data, height);
@@ -29,6 +29,7 @@ class BarChart extends AbstractChart {
             ((barHeight > 0 ? baseHeight - barHeight : baseHeight) / 4) * 3 +
             paddingTop
           }
+          rx={barRadius}
           width={barWidth}
           height={(Math.abs(barHeight) / 4) * 3}
           fill="url(#fillShadowGradient)"
@@ -60,6 +61,31 @@ class BarChart extends AbstractChart {
     });
   };
 
+  renderValuesOnTopOfBars = config => {
+    const { data, width, height, paddingTop, paddingRight } = config;
+    const baseHeight = this.calcBaseHeight(data, height);
+    return data.map((x, i) => {
+      const barHeight = this.calcHeight(x, data, height);
+      const barWidth = 32 * this.getBarPercentage();
+      return (
+        <Text
+          key={Math.random()}
+          x={
+            paddingRight +
+            (i * (width - paddingRight)) / data.length +
+            barWidth / 1
+          }
+          y={((baseHeight - barHeight) / 4) * 3 + paddingTop - 1}
+          fill={this.props.chartConfig.color(0.6)}
+          fontSize="12"
+          textAnchor="middle"
+        >
+          {data[i]}
+        </Text>
+      );
+    });
+  };
+
   render() {
     const {
       width,
@@ -69,14 +95,32 @@ class BarChart extends AbstractChart {
       withHorizontalLabels = true,
       withVerticalLabels = true,
       verticalLabelRotation = 0,
-      horizontalLabelRotation = 0
+      horizontalLabelRotation = 0,
+      withInnerLines = true,
+      showBarTops = true,
+      showValuesOnTopOfBars = false,
+      segments = 4
     } = this.props;
     const { borderRadius = 0, paddingTop = 16, paddingRight = 64 } = style;
     const config = {
       width,
       height,
       verticalLabelRotation,
-      horizontalLabelRotation
+      horizontalLabelRotation,
+      barRadius:
+        (this.props.chartConfig && this.props.chartConfig.barRadius) || 0,
+      decimalPlaces:
+        (this.props.chartConfig && this.props.chartConfig.decimalPlaces) ?? 2,
+      formatYLabel:
+        (this.props.chartConfig && this.props.chartConfig.formatYLabel) ||
+        function(label) {
+          return label;
+        },
+      formatXLabel:
+        (this.props.chartConfig && this.props.chartConfig.formatXLabel) ||
+        function(label) {
+          return label;
+        }
     };
     return (
       <View style={style}>
@@ -93,17 +137,19 @@ class BarChart extends AbstractChart {
             fill="url(#backgroundGradient)"
           />
           <G>
-            {this.renderHorizontalLines({
-              ...config,
-              count: 4,
-              paddingTop
-            })}
+            {withInnerLines
+              ? this.renderHorizontalLines({
+                  ...config,
+                  count: segments,
+                  paddingTop
+                })
+              : null}
           </G>
           <G>
             {withHorizontalLabels
               ? this.renderHorizontalLabels({
                   ...config,
-                  count: 4,
+                  count: segments,
                   data: data.datasets[0].data,
                   paddingTop,
                   paddingRight
@@ -130,12 +176,22 @@ class BarChart extends AbstractChart {
             })}
           </G>
           <G>
-            {this.renderBarTops({
-              ...config,
-              data: data.datasets[0].data,
-              paddingTop,
-              paddingRight
-            })}
+            {showValuesOnTopOfBars &&
+              this.renderValuesOnTopOfBars({
+                ...config,
+                data: data.datasets[0].data,
+                paddingTop,
+                paddingRight
+              })}
+          </G>
+          <G>
+            {showBarTops &&
+              this.renderBarTops({
+                ...config,
+                data: data.datasets[0].data,
+                paddingTop,
+                paddingRight
+              })}
           </G>
         </Svg>
       </View>

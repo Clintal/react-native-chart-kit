@@ -1,5 +1,4 @@
 import React from "react";
-import PropTypes from "prop-types";
 import { View } from "react-native";
 import { Svg, G, Text, Rect } from "react-native-svg";
 import _ from "lodash";
@@ -18,17 +17,33 @@ import {
 const SQUARE_SIZE = 20;
 const MONTH_LABEL_GUTTER_SIZE = 8;
 const paddingLeft = 32;
+
+function mapValue(x, in_min, in_max, out_min, out_max) {
+  return ((x - in_min) * (out_max - out_min)) / (in_max - in_min) + out_min;
+}
+
 class ContributionGraph extends AbstractChart {
   constructor(props) {
     super(props);
+
+    let { maxValue, minValue, valueCache } = this.getValueCache(props.values);
+
     this.state = {
-      valueCache: this.getValueCache(props.values)
+      maxValue,
+      minValue,
+      valueCache
     };
   }
 
-  componentWillReceiveProps(nextProps) {
+  UNSAFE_componentWillReceiveProps(nextProps) {
+    let { maxValue, minValue, valueCache } = this.getValueCache(
+      nextProps.values
+    );
+
     this.setState({
-      valueCache: this.getValueCache(nextProps.values)
+      maxValue,
+      minValue,
+      valueCache
     });
   }
 
@@ -93,20 +108,31 @@ class ContributionGraph extends AbstractChart {
   }
 
   getValueCache(values) {
-    return values.reduce((memo, value) => {
-      const date = convertToDate(value.date);
-      const index = Math.floor(
-        (date - this.getStartDateWithEmptyDays()) / MILLISECONDS_IN_ONE_DAY
-      );
-      memo[index] = {
-        value,
-        title: this.props.titleForValue
-          ? this.props.titleForValue(value)
-          : null,
-        tooltipDataAttrs: this.getTooltipDataAttrsForValue(value)
-      };
-      return memo;
-    }, {});
+    let minValue = Infinity,
+      maxValue = -Infinity;
+
+    return {
+      valueCache: values.reduce((memo, value) => {
+        const date = convertToDate(value.date);
+        const index = Math.floor(
+          (date - this.getStartDateWithEmptyDays()) / MILLISECONDS_IN_ONE_DAY
+        );
+
+        minValue = Math.min(value[this.props.accessor], minValue);
+        maxValue = Math.max(value[this.props.accessor], maxValue);
+
+        memo[index] = {
+          value,
+          title: this.props.titleForValue
+            ? this.props.titleForValue(value)
+            : null,
+          tooltipDataAttrs: this.getTooltipDataAttrsForValue(value)
+        };
+        return memo;
+      }, {}),
+      minValue,
+      maxValue
+    };
   }
 
   getValueForIndex(index) {
@@ -119,13 +145,22 @@ class ContributionGraph extends AbstractChart {
   getClassNameForIndex(index) {
     if (this.state.valueCache[index]) {
       if (this.state.valueCache[index].value) {
-        const count = this.state.valueCache[index].value.count;
+        const count = this.state.valueCache[index].value[this.props.accessor];
+
         if (count) {
-          const opacity = (count * 0.15 > 1 ? 1 : count * 0.15) + 0.15;
+          const opacity = mapValue(
+            count,
+            this.state.minValue,
+            this.state.maxValue,
+            0.15 + 0.05, // + 0.05 to make smaller values a bit more visible
+            1
+          );
+
           return this.props.chartConfig.color(opacity);
         }
       }
     }
+
     return this.props.chartConfig.color(0.15);
   }
 
@@ -140,7 +175,7 @@ class ContributionGraph extends AbstractChart {
     if (this.state.valueCache[index]) {
       return this.state.valueCache[index].tooltipDataAttrs;
     }
-    return this.getTooltipDataAttrsForValue({ date: null, count: null });
+    return this.getTooltipDataAttrsForValue({ date: null, [this.props.accessor]: null });
   }
 
   getTooltipDataAttrsForValue(value) {
@@ -201,21 +236,18 @@ class ContributionGraph extends AbstractChart {
     ];
   }
 
-  handleClick(value) {
-    if (this.props.onClick) {
-      this.props.onClick(value);
-    }
-  }
-
   renderSquare(dayIndex, index) {
     const indexOutOfRange =
       index < this.getNumEmptyDaysAtStart() ||
       index >= this.getNumEmptyDaysAtStart() + this.props.numDays;
+
     if (indexOutOfRange && !this.props.showOutOfRangeDays) {
       return null;
     }
+
     const [x, y] = this.getSquareCoordinates(dayIndex);
     const { squareSize = SQUARE_SIZE } = this.props;
+
     return (
       <Rect
         key={index}
@@ -225,8 +257,27 @@ class ContributionGraph extends AbstractChart {
         y={y}
         title={this.getTitleForIndex(index)}
         fill={this.getClassNameForIndex(index)}
+        onPress={() => {
+          this.handleDayPress(index);
+        }}
         {...this.getTooltipDataAttrsForIndex(index)}
       />
+    );
+  }
+
+  handleDayPress(index) {
+    if (!this.props.onDayPress) {
+      return;
+    }
+    this.props.onDayPress(
+      this.state.valueCache[index] && this.state.valueCache[index].value
+        ? this.state.valueCache[index].value
+        : {
+            [this.props.accessor]: 0,
+            date: new Date(
+              this.getStartDate().valueOf() + index * MILLISECONDS_IN_ONE_DAY
+            )
+          }
     );
   }
 
@@ -265,7 +316,9 @@ class ContributionGraph extends AbstractChart {
           y={y + 8}
           {...this.getPropsForLabels()}
         >
-          {MONTH_LABELS[endOfWeek.getMonth()]}
+          {this.props.getMonthLabel
+            ? this.props.getMonthLabel(endOfWeek.getMonth())
+            : MONTH_LABELS[endOfWeek.getMonth()]}
         </Text>
       ) : null;
     });
@@ -301,34 +354,6 @@ class ContributionGraph extends AbstractChart {
   }
 }
 
-ContributionGraph.ViewPropTypes = {
-  values: PropTypes.arrayOf(
-    // array of objects with date and arbitrary metadata
-    PropTypes.shape({
-      date: PropTypes.oneOfType([
-        PropTypes.string,
-        PropTypes.number,
-        PropTypes.instanceOf(Date)
-      ]).isRequired
-    }).isRequired
-  ).isRequired,
-  numDays: PropTypes.number, // number of days back from endDate to show
-  endDate: PropTypes.oneOfType([
-    PropTypes.string,
-    PropTypes.number,
-    PropTypes.instanceOf(Date)
-  ]), // end of date range
-  gutterSize: PropTypes.number, // size of space between squares
-  squareSize: PropTypes.number, // size of squares
-  horizontal: PropTypes.bool, // whether to orient horizontally or vertically
-  showMonthLabels: PropTypes.bool, // whether to show month labels
-  showOutOfRangeDays: PropTypes.bool, // whether to render squares for extra days in week after endDate, and before start date
-  tooltipDataAttrs: PropTypes.oneOfType([PropTypes.object, PropTypes.func]), // data attributes to add to square for setting 3rd party tooltips, e.g. { 'data-toggle': 'tooltip' } for bootstrap tooltips
-  titleForValue: PropTypes.func, // function which returns title text for value
-  classForValue: PropTypes.func, // function which returns html class for value
-  onClick: PropTypes.func // callback function when a square is clicked
-};
-
 ContributionGraph.defaultProps = {
   numDays: 200,
   endDate: new Date(),
@@ -337,6 +362,7 @@ ContributionGraph.defaultProps = {
   horizontal: true,
   showMonthLabels: true,
   showOutOfRangeDays: false,
+  accessor: "count",
   classForValue: value => (value ? "black" : "#8cc665")
 };
 
